@@ -1,1 +1,0 @@
-/mnt/coder/paseo_worktrees/0rykjpbz/noxious-warthog/packages/protocol/dist/terminal-subscription-key.d.ts

@@ -1,1 +1,0 @@
-/mnt/coder/paseo_worktrees/0rykjpbz/noxious-warthog/packages/client/dist/daemon-client-transport-types.d.ts
