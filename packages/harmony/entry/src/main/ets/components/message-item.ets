@@ -9,7 +9,14 @@
  *   - activity_log → centered system message
  */
 
-import type { StreamItem } from '../models/stream-types';
+import type {
+  StreamItem,
+  UserMessageItem,
+  AssistantMessageItem,
+  ThoughtItem,
+  ToolCallItem,
+  ActivityLogItem,
+} from '../models/stream-types';
 import { PaseoTheme } from '../common/theme';
 import { MarkdownBlock } from './markdown-block';
 import { ToolCallCard } from './tool-call-card';
@@ -23,6 +30,27 @@ export struct MessageItem {
     text: '',
     timestamp: 0,
   };
+
+  /** Type-narrowed accessor for user message properties. */
+  private asUserMessage(): UserMessageItem {
+    return this.item as UserMessageItem;
+  }
+  /** Type-narrowed accessor for assistant message properties. */
+  private asAssistantMessage(): AssistantMessageItem {
+    return this.item as AssistantMessageItem;
+  }
+  /** Type-narrowed accessor for thought properties. */
+  private asThought(): ThoughtItem {
+    return this.item as ThoughtItem;
+  }
+  /** Type-narrowed accessor for tool call properties. */
+  private asToolCall(): ToolCallItem {
+    return this.item as ToolCallItem;
+  }
+  /** Type-narrowed accessor for activity log properties. */
+  private asActivityLog(): ActivityLogItem {
+    return this.item as ActivityLogItem;
+  }
 
   build() {
     Column() {
@@ -46,7 +74,7 @@ export struct MessageItem {
     Row() {
       Blank();
       Column() {
-        Text(this.item.text)
+        Text(this.asUserMessage().text)
           .fontSize(PaseoTheme.fontSizeMD)
           .fontColor(PaseoTheme.textInverse)
           .lineHeight(PaseoTheme.fontSizeMD * 1.5);
@@ -79,7 +107,7 @@ export struct MessageItem {
   @Builder
   buildAssistantMessage() {
     Column() {
-      MarkdownBlock({ text: this.item.text });
+      MarkdownBlock({ text: this.asAssistantMessage().text });
     }
     .width('100%')
     .padding({
@@ -114,8 +142,8 @@ export struct MessageItem {
         bottom: PaseoTheme.spaceXS,
       });
 
-      if (this.item.text) {
-        Text(this.item.text)
+      if (this.asThought().text) {
+        Text(this.asThought().text)
           .fontSize(PaseoTheme.fontSizeSM)
           .fontColor(PaseoTheme.textTertiary)
           .fontStyle(FontStyle.Italic)
@@ -135,9 +163,9 @@ export struct MessageItem {
   buildToolCall() {
     Column() {
       ToolCallCard({
-        name: this.item.name,
-        status: this.item.status,
-        detail: this.item.detail,
+        name: this.asToolCall().name,
+        status: this.asToolCall().status,
+        detail: this.asToolCall().detail,
       });
     }
     .width('100%')
@@ -152,7 +180,7 @@ export struct MessageItem {
   buildActivityLog() {
     Row() {
       Blank();
-      Text(this.item.message)
+      Text(this.asActivityLog().message)
         .fontSize(PaseoTheme.fontSizeXS)
         .fontColor(PaseoTheme.textTertiary)
         .fontStyle(FontStyle.Italic);

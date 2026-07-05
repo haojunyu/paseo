@@ -18,9 +18,9 @@ export struct AgentHeader {
   @Prop status: AgentStatus = 'idle';
   @Prop provider: string = '';
   @Prop model: string = '';
-  @Prop onBack: () => void = () => {};
-  @Prop onTerminal: () => void = () => {};
-  @Prop onMenu: () => void = () => {};
+  onBack: () => void = () => {};
+  onTerminal: () => void = () => {};
+  onMenu: () => void = () => {};
 
   get statusColor(): string {
     switch (this.status) {

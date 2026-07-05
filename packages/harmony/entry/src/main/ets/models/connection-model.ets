@@ -5,6 +5,12 @@
  * automatically re-render when connection status changes.
  */
 
+export interface ServerInfo {
+  serverId: string;
+  hostname: string;
+  version: string;
+}
+
 @Observed
 export class ConnectionModel {
   /** Current WebSocket connection state. */
@@ -39,7 +45,7 @@ export class ConnectionModel {
   }
 
   /** Transition to connected state with server info. */
-  setConnected(info: { serverId: string; hostname: string; version: string }): void {
+  setConnected(info: ServerInfo): void {
     this.status = 'connected';
     this.serverId = info.serverId;
     this.hostname = info.hostname;

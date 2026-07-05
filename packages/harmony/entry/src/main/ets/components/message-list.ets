@@ -17,8 +17,8 @@ import { Icons } from '../common/icons';
 @Component
 export struct MessageList {
   @ObjectLink store: TimelineStore;
-  @Prop onLoadOlder: () => void = () => {};
-  @State private scroller: Scroller = new Scroller();
+  onLoadOlder: () => void = () => {};
+  private scroller: Scroller = new Scroller();
   @State private isAtBottom: boolean = true;
   @State private lastTotalCount: number = 0;
 

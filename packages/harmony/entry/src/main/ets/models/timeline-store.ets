@@ -144,7 +144,7 @@ export class TimelineStore {
  * In production, this comes from DaemonClient.fetchAgentTimeline().
  * This helper constructs the payload shape that timeline-core expects.
  */
-export function buildTimelinePayload(params: {
+export interface BuildTimelinePayloadParams {
   agentId: string;
   direction: 'tail' | 'before' | 'after';
   reset: boolean;
@@ -155,7 +155,9 @@ export function buildTimelinePayload(params: {
   error: string | null;
   hasNewer: boolean;
   hasOlder: boolean;
-}): TimelineResponsePayload {
+}
+
+export function buildTimelinePayload(params: BuildTimelinePayloadParams): TimelineResponsePayload {
   return {
     agentId: params.agentId,
     direction: params.direction,

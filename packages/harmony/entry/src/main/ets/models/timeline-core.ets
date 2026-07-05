@@ -6,11 +6,6 @@
  * 1. Converting raw daemon timeline entries into StreamItem[] arrays
  * 2. Sequence-number-based deduplication and gap detection
  * 3. Merging incremental timeline pages (tail, before, after)
- *
- * Phase 1 scope: the happy path for a single agent's timeline.
- * Edge cases (epoch changes, reset, assistant head preservation, optimistic
- * user merge) are simplified. Full parity with the RN implementation is a
- * Phase 2 task.
  */
 
 import type {
@@ -23,153 +18,186 @@ import type {
   ThoughtItem,
   ToolCallItem,
   ActivityLogItem,
+  ActivityLogType,
   AgentToolCallStatus,
 } from './stream-types';
 import { generateStreamId } from './stream-types';
 
-// ---------------------------------------------------------------------------
-// Configuration
-// ---------------------------------------------------------------------------
-
-/** Maximum number of items to keep in the live head buffer. */
 const MAX_HEAD_SIZE = 200;
 
-// ---------------------------------------------------------------------------
-// Stream reduction: raw events → StreamItem[]
-// ---------------------------------------------------------------------------
+interface HydratedEntry {
+  event: TimelineEvent;
+  timestamp: number;
+  seq: number;
+}
 
-/**
- * Append a live stream event to the items array.
- * Mutates `items` in place and returns the same reference for chaining.
- */
 function appendStreamItem(items: StreamItem[], item: StreamItem): StreamItem[] {
   items.push(item);
   return items;
 }
 
 function buildUserMessage(item: TimelineEventItem, timestamp: number): UserMessageItem {
-  return {
+  const msg: UserMessageItem = {
     kind: 'user_message',
     id: generateStreamId('user'),
-    text: item.text ?? '',
-    timestamp,
+    text: item.text !== undefined ? item.text : '',
+    timestamp: timestamp,
   };
+  return msg;
 }
 
 function buildAssistantMessage(item: TimelineEventItem, timestamp: number): AssistantMessageItem {
-  return {
+  const msg: AssistantMessageItem = {
     kind: 'assistant_message',
-    id: item.messageId ?? generateStreamId('assistant'),
-    text: item.text ?? '',
-    timestamp,
+    id: item.messageId !== undefined ? item.messageId : generateStreamId('assistant'),
+    text: item.text !== undefined ? item.text : '',
+    timestamp: timestamp,
   };
+  return msg;
 }
 
 function buildThought(item: TimelineEventItem, timestamp: number): ThoughtItem {
-  return {
+  const thought: ThoughtItem = {
     kind: 'thought',
     id: generateStreamId('thought'),
-    text: item.text ?? '',
-    timestamp,
+    text: item.text !== undefined ? item.text : '',
+    timestamp: timestamp,
     status: 'ready',
   };
+  return thought;
 }
 
 function buildToolCall(item: TimelineEventItem, timestamp: number): ToolCallItem {
-  return {
+  const tc: ToolCallItem = {
     kind: 'tool_call',
     id: generateStreamId('tool'),
-    timestamp,
-    callId: item.callId ?? 'unknown',
-    provider: '',  // Filled by caller
-    name: item.name ?? 'unknown',
-    status: (item.status as AgentToolCallStatus) ?? 'running',
-    detail: item.detail ?? {},
+    timestamp: timestamp,
+    callId: item.callId !== undefined ? item.callId : 'unknown',
+    provider: '',
+    name: item.name !== undefined ? item.name : 'unknown',
+    status: (item.status !== undefined ? item.status : 'running') as AgentToolCallStatus,
+    detail: item.detail !== undefined ? item.detail : {} as ESObject,
   };
+  return tc;
 }
 
 function buildActivityLog(item: TimelineEventItem, timestamp: number): ActivityLogItem {
-  return {
+  const activityType: ActivityLogType = (item.status === 'failed' ? 'error' : 'info') as ActivityLogType;
+  const log: ActivityLogItem = {
     kind: 'activity_log',
     id: generateStreamId('activity'),
-    timestamp,
-    activityType: (item.status === 'failed' ? 'error' : 'info') as ActivityLogType,
-    message: item.message ?? item.text ?? '',
+    timestamp: timestamp,
+    activityType: activityType,
+    message: item.message !== undefined ? item.message : (item.text !== undefined ? item.text : ''),
   };
+  return log;
 }
 
 function mergeAssistantText(existing: StreamItem[], text: string, timestamp: number): StreamItem[] {
-  const last = existing[existing.length - 1];
-  if (last && last.kind === 'assistant_message') {
+  const last: StreamItem | undefined = existing.length > 0 ? existing[existing.length - 1] : undefined;
+  if (last !== undefined && last.kind === 'assistant_message') {
     const updated: AssistantMessageItem = {
-      ...last,
+      kind: 'assistant_message',
+      id: last.id,
       text: last.text + text,
-      timestamp,
+      timestamp: timestamp,
     };
-    const next = [...existing];
+    const next: StreamItem[] = [];
+    for (let i = 0; i < existing.length; i++) {
+      next.push(existing[i]);
+    }
     next[next.length - 1] = updated;
     return next;
   }
   return existing;
 }
 
-/**
- * Apply a single timeline event to the stream state.
- * Ported from `reduceStreamUpdate` in types/stream.ts.
- */
 export function reduceStreamUpdate(
   state: StreamItem[],
   event: TimelineEvent,
   timestamp: number,
 ): StreamItem[] {
-  const item = event.item;
+  const item: TimelineEventItem = event.item;
 
   switch (item.type) {
-    case 'user_message':
-      return appendStreamItem([...state], buildUserMessage(item, timestamp));
-
-    case 'assistant_message': {
-      // Merge contiguous assistant text chunks
-      const last = state[state.length - 1];
-      if (last && last.kind === 'assistant_message') {
-        return mergeAssistantText(state, item.text ?? '', timestamp);
+    case 'user_message': {
+      const next: StreamItem[] = [];
+      for (let i = 0; i < state.length; i++) {
+        next.push(state[i]);
       }
-      return appendStreamItem([...state], buildAssistantMessage(item, timestamp));
+      return appendStreamItem(next, buildUserMessage(item, timestamp));
     }
 
-    case 'reasoning':
-      return appendStreamItem([...state], buildThought(item, timestamp));
+    case 'assistant_message': {
+      const last: StreamItem | undefined = state.length > 0 ? state[state.length - 1] : undefined;
+      if (last !== undefined && last.kind === 'assistant_message') {
+        return mergeAssistantText(state, item.text !== undefined ? item.text : '', timestamp);
+      }
+      const next: StreamItem[] = [];
+      for (let i = 0; i < state.length; i++) {
+        next.push(state[i]);
+      }
+      return appendStreamItem(next, buildAssistantMessage(item, timestamp));
+    }
+
+    case 'reasoning': {
+      const next: StreamItem[] = [];
+      for (let i = 0; i < state.length; i++) {
+        next.push(state[i]);
+      }
+      return appendStreamItem(next, buildThought(item, timestamp));
+    }
 
     case 'tool_call': {
-      // Update existing tool call if callId matches
-      if (item.callId) {
-        const existingIdx = state.findLastIndex(
-          (s) => s.kind === 'tool_call' && (s as ToolCallItem).callId === item.callId
-        );
+      if (item.callId !== undefined) {
+        const callId: string = item.callId;
+        let existingIdx = -1;
+        for (let i = state.length - 1; i >= 0; i--) {
+          const s: StreamItem = state[i];
+          if (s.kind === 'tool_call' && (s as ToolCallItem).callId === callId) {
+            existingIdx = i;
+            break;
+          }
+        }
         if (existingIdx >= 0) {
-          const next = [...state];
-          const existing = next[existingIdx] as ToolCallItem;
-          next[existingIdx] = {
-            ...existing,
-            status: (item.status as AgentToolCallStatus) ?? existing.status,
-            detail: item.detail ?? existing.detail,
-            timestamp,
+          const next: StreamItem[] = [];
+          for (let i = 0; i < state.length; i++) {
+            next.push(state[i]);
+          }
+          const existing: ToolCallItem = next[existingIdx] as ToolCallItem;
+          const updated: ToolCallItem = {
+            kind: 'tool_call',
+            id: existing.id,
+            timestamp: timestamp,
+            callId: existing.callId,
+            provider: existing.provider,
+            name: existing.name,
+            status: (item.status !== undefined ? item.status : existing.status) as AgentToolCallStatus,
+            detail: item.detail !== undefined ? item.detail : existing.detail,
           };
+          next[existingIdx] = updated;
           return next;
         }
       }
-      const tc = buildToolCall(item, timestamp);
+      const tc: ToolCallItem = buildToolCall(item, timestamp);
       tc.provider = event.provider;
-      const next = [...state];
+      const next: StreamItem[] = [];
+      for (let i = 0; i < state.length; i++) {
+        next.push(state[i]);
+      }
       next.push(tc);
       return next;
     }
 
-    case 'error':
-      return appendStreamItem([...state], buildActivityLog(item, timestamp));
+    case 'error': {
+      const next: StreamItem[] = [];
+      for (let i = 0; i < state.length; i++) {
+        next.push(state[i]);
+      }
+      return appendStreamItem(next, buildActivityLog(item, timestamp));
+    }
 
     case 'turn':
-      // Turn boundaries are ignored in Phase 1 (visual only separator)
       return state;
 
     default:
@@ -177,24 +205,23 @@ export function reduceStreamUpdate(
   }
 }
 
-/**
- * Hydrate an array of raw timeline entries into StreamItem[].
- * This is the equivalent of `hydrateStreamState` in the RN code.
- */
+export interface HydrateStreamEntry {
+  event: TimelineEvent;
+  timestamp: number;
+}
+
 export function hydrateStreamState(
-  events: Array<{ event: TimelineEvent; timestamp: number }>,
+  events: HydrateStreamEntry[],
 ): StreamItem[] {
   let state: StreamItem[] = [];
-  for (const { event, timestamp } of events) {
-    state = reduceStreamUpdate(state, event, timestamp);
+  for (let ei = 0; ei < events.length; ei++) {
+    const entry = events[ei];
+    state = reduceStreamUpdate(state, entry.event, entry.timestamp);
   }
   return state;
 }
 
-// ---------------------------------------------------------------------------
-// Timeline response processing (simplified)
-// ---------------------------------------------------------------------------
-
+// Timeline response types
 export interface TimelineResponsePayload {
   agentId: string;
   direction: 'tail' | 'before' | 'after';
@@ -212,8 +239,8 @@ export interface TimelineResponseEntry {
   seqStart: number;
   seqEnd: number;
   provider: string;
-  item: Record<string, unknown>;
-  timestamp: string; // ISO 8601
+  item: ESObject;
+  timestamp: string;
 }
 
 export interface ProcessTimelineInput {
@@ -229,19 +256,15 @@ export interface ProcessTimelineOutput {
   cursor: TimelineCursor | undefined;
   cursorChanged: boolean;
   error: string | null;
-  /** True if there are more items to fetch (for pagination). */
   hasMore: boolean;
 }
 
-/**
- * Determine if a timeline entry should be accepted based on sequence numbers.
- */
 function shouldAcceptSeq(
   cursor: TimelineCursor | undefined,
   epoch: string,
   seq: number,
 ): 'accept' | 'drop' | 'gap' {
-  if (!cursor) {
+  if (cursor === undefined) {
     return 'accept';
   }
   if (cursor.epoch !== epoch) {
@@ -256,27 +279,22 @@ function shouldAcceptSeq(
   return 'accept';
 }
 
-/**
- * Process a timeline response from the daemon.
- *
- * Simplified port of `processTimelineResponse` from session-stream-reducers.ts.
- * Phase 1 handles the common paths:
- *   - Initial tail load (direction='tail', no cursor)
- *   - Live stream append (direction='after', sequential seqs)
- *   - Error payloads
- *
- * Not yet implemented (Phase 2):
- *   - Direction 'before' (scrollback pagination)
- *   - Epoch changes / reset paths
- *   - Optimistic user message reconciliation
- *   - Assistant head preservation on replace
- */
-export function processTimelineResponse(input: ProcessTimelineInput): ProcessTimelineOutput {
-  const { payload, currentTail, currentHead, currentCursor } = input;
+function copyArray<T>(arr: T[]): T[] {
+  const result: T[] = [];
+  for (let i = 0; i < arr.length; i++) {
+    result.push(arr[i]);
+  }
+  return result;
+}
 
-  // Error path
-  if (payload.error) {
-    return {
+export function processTimelineResponse(input: ProcessTimelineInput): ProcessTimelineOutput {
+  const payload: TimelineResponsePayload = input.payload;
+  const currentTail: StreamItem[] = input.currentTail;
+  const currentHead: StreamItem[] = input.currentHead;
+  const currentCursor: TimelineCursor | undefined = input.currentCursor;
+
+  if (payload.error !== null) {
+    const output: ProcessTimelineOutput = {
       tail: currentTail,
       head: currentHead,
       cursor: currentCursor,
@@ -284,11 +302,11 @@ export function processTimelineResponse(input: ProcessTimelineInput): ProcessTim
       error: payload.error,
       hasMore: false,
     };
+    return output;
   }
 
-  // No entries — nothing to do
-  if (!payload.entries || payload.entries.length === 0) {
-    return {
+  if (payload.entries === undefined || payload.entries.length === 0) {
+    const output: ProcessTimelineOutput = {
       tail: currentTail,
       head: currentHead,
       cursor: currentCursor,
@@ -296,31 +314,42 @@ export function processTimelineResponse(input: ProcessTimelineInput): ProcessTim
       error: null,
       hasMore: false,
     };
+    return output;
   }
 
-  // Convert entries to { event, timestamp } pairs
-  const hydrated = payload.entries.map((entry) => ({
-    event: {
+  const hydrated: HydratedEntry[] = [];
+  for (let ei = 0; ei < payload.entries.length; ei++) {
+    const entry = payload.entries[ei];
+    const timelineEvent: TimelineEvent = {
       provider: entry.provider,
       item: entry.item as TimelineEventItem,
-    } as TimelineEvent,
-    timestamp: new Date(entry.timestamp).getTime(),
-    seq: entry.seqStart,
-  }));
+    };
+    const hydratedEntry: HydratedEntry = {
+      event: timelineEvent,
+      timestamp: new Date(entry.timestamp).getTime(),
+      seq: entry.seqStart,
+    };
+    hydrated.push(hydratedEntry);
+  }
 
-  // ----------------------------------------------------------------
   // Case 1: Initial load (no cursor) or reset
-  // Replace tail entirely
-  // ----------------------------------------------------------------
-  if (!currentCursor || payload.reset) {
-    const newTail = hydrateStreamState(hydrated);
+  if (currentCursor === undefined || payload.reset) {
+    const batchEntries: HydrateStreamEntry[] = [];
+    for (let bi = 0; bi < hydrated.length; bi++) {
+      const h: HydratedEntry = hydrated[bi];
+      const entry: HydrateStreamEntry = { event: h.event, timestamp: h.timestamp };
+      batchEntries.push(entry);
+    }
+    const newTail: StreamItem[] = hydrateStreamState(batchEntries);
+    const firstSeq: number = hydrated.length > 0 ? hydrated[0].seq : 1;
+    const lastSeq: number = hydrated.length > 0 ? hydrated[hydrated.length - 1].seq : 1;
     const newCursor: TimelineCursor = {
       epoch: payload.epoch,
-      startSeq: payload.startSeq ?? hydrated[0]?.seq ?? 1,
-      endSeq: payload.endSeq ?? hydrated[hydrated.length - 1]?.seq ?? 1,
+      startSeq: payload.startSeq !== null ? payload.startSeq : firstSeq,
+      endSeq: payload.endSeq !== null ? payload.endSeq : lastSeq,
     };
 
-    return {
+    const output: ProcessTimelineOutput = {
       tail: newTail,
       head: [],
       cursor: newCursor,
@@ -328,67 +357,65 @@ export function processTimelineResponse(input: ProcessTimelineInput): ProcessTim
       error: null,
       hasMore: payload.hasNewer,
     };
+    return output;
   }
 
-  // ----------------------------------------------------------------
-  // Case 2: Incremental append (direction='after' or 'tail' with cursor)
-  // Filter stale events, detect gaps, append new items
-  // ----------------------------------------------------------------
-  let nextTail = [...currentTail];
-  let nextHead = [...currentHead];
-  let nextCursor: TimelineCursor = { ...currentCursor };
+  // Case 2: Incremental append
+  let nextTail: StreamItem[] = copyArray(currentTail);
+  let nextHead: StreamItem[] = copyArray(currentHead);
+  let nextCursor: TimelineCursor = {
+    epoch: currentCursor.epoch,
+    startSeq: currentCursor.startSeq,
+    endSeq: currentCursor.endSeq,
+  };
   let acceptedCount = 0;
-  let hasGap = false;
 
-  for (const entry of hydrated) {
-    const decision = shouldAcceptSeq(nextCursor, payload.epoch, entry.seq);
+  for (let ei = 0; ei < hydrated.length; ei++) {
+    const entry: HydratedEntry = hydrated[ei];
+    const decision: 'accept' | 'drop' | 'gap' = shouldAcceptSeq(nextCursor, payload.epoch, entry.seq);
 
-    switch (decision) {
-      case 'accept': {
-        // Apply to head if it has items, otherwise to tail
-        if (nextHead.length > 0) {
-          nextHead = reduceStreamUpdate(nextHead, entry.event, entry.timestamp);
-        } else {
-          nextTail = reduceStreamUpdate(nextTail, entry.event, entry.timestamp);
-        }
-        nextCursor.endSeq = entry.seq;
-        acceptedCount += 1;
-        break;
+    if (decision === 'accept') {
+      if (nextHead.length > 0) {
+        nextHead = reduceStreamUpdate(nextHead, entry.event, entry.timestamp);
+      } else {
+        nextTail = reduceStreamUpdate(nextTail, entry.event, entry.timestamp);
       }
-      case 'gap': {
-        hasGap = true;
-        // Accept the event anyway to avoid dropping data, but mark the gap
-        if (nextHead.length > 0) {
-          nextHead = reduceStreamUpdate(nextHead, entry.event, entry.timestamp);
-        } else {
-          nextTail = reduceStreamUpdate(nextTail, entry.event, entry.timestamp);
-        }
-        nextCursor.endSeq = entry.seq;
-        acceptedCount += 1;
-        break;
+      nextCursor.endSeq = entry.seq;
+      acceptedCount += 1;
+    } else if (decision === 'gap') {
+      if (nextHead.length > 0) {
+        nextHead = reduceStreamUpdate(nextHead, entry.event, entry.timestamp);
+      } else {
+        nextTail = reduceStreamUpdate(nextTail, entry.event, entry.timestamp);
       }
-      case 'drop':
-        // Silently drop duplicates
-        break;
+      nextCursor.endSeq = entry.seq;
+      acceptedCount += 1;
     }
+    // 'drop' — silently skip
   }
 
   // Trim head to max size
   if (nextHead.length > MAX_HEAD_SIZE) {
-    // Move oldest head items to tail
-    const overflow = nextHead.length - MAX_HEAD_SIZE;
-    nextTail = [...nextTail, ...nextHead.slice(0, overflow)];
-    nextHead = nextHead.slice(overflow);
+    const overflow: number = nextHead.length - MAX_HEAD_SIZE;
+    for (let i = 0; i < overflow; i++) {
+      nextTail.push(nextHead[i]);
+    }
+    const trimmedHead: StreamItem[] = [];
+    for (let i = overflow; i < nextHead.length; i++) {
+      trimmedHead.push(nextHead[i]);
+    }
+    nextHead = trimmedHead;
   }
 
-  const cursorChanged = acceptedCount > 0;
+  const cursorChanged: boolean = acceptedCount > 0;
 
-  return {
+  const output: ProcessTimelineOutput = {
     tail: nextTail,
     head: nextHead,
     cursor: nextCursor,
-    cursorChanged,
-    error: hasGap ? null : null, // Gap is informational, not an error
+    cursorChanged: cursorChanged,
+    error: null,
     hasMore: payload.hasNewer,
   };
+  return output;
 }

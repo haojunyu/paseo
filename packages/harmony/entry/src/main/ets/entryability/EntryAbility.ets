@@ -13,7 +13,7 @@ import { window } from '@kit.ArkUI';
 import { PaseoClientLifecycle } from '../client/client-lifecycle';
 import { preferences } from '@kit.ArkData';
 
-export default class EntryAbility extends UIAbility {
+export class EntryAbility extends UIAbility {
   /** Global singleton — one daemon client per app process. */
   static paseoClient: PaseoClientLifecycle = new PaseoClientLifecycle();
 
@@ -39,3 +39,5 @@ export default class EntryAbility extends UIAbility {
     EntryAbility.paseoClient.disconnect();
   }
 }
+
+export default EntryAbility;

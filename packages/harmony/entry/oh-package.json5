@@ -5,12 +5,5 @@
   "main": "",
   "author": "",
   "license": "UNLICENSED",
-  "dependencies": {
-    "@getpaseo/client": "file:../../../client",
-    "@getpaseo/protocol": "file:../../../protocol",
-    "@getpaseo/highlight": "file:../../../highlight",
-    "markdown-it": "^10.0.0",
-    "zod": "^4.4.3",
-    "mnemonic-id": "^3.2.7"
-  }
+  "dependencies": {}
 }

@@ -4,13 +4,6 @@
  * Implements the `DaemonTransport` interface (from @getpaseo/client) using
  * @ohos.net.webSocket. Handles both JSON text frames (session messages) and
  * binary frames (terminal I/O).
- *
- * Paseo binary frame layout (2-byte header + payload):
- *   byte 0: opcode  (0x01 = Output, 0x02 = Input, 0x03 = Resize, 0x04 = Snapshot)
- *   byte 1: slot    (terminal slot id)
- *   rest:   payload (raw bytes or JSON)
- *
- * @module harmony-transport
  */
 
 import webSocket from '@ohos.net.webSocket';
@@ -24,128 +17,136 @@ const WS_CLOSED = 3;
 
 export interface HarmonyTransportOptions {
   url: string;
-  /** Optional headers sent during the WebSocket handshake. */
   headers?: Record<string, string>;
-  /** Optional sub-protocols. */
   protocols?: string[];
-  /** Logger for transport-level diagnostics. */
   logger?: TransportLogger;
+}
+
+// Explicit interfaces for ArkTS strict mode (no untyped object literals)
+interface CloseEventData {
+  code: number;
+  reason: string;
+}
+
+interface ErrorEventData {
+  message: string;
+}
+
+interface LoggerWarnData {
+  err?: string;
+  url?: string;
+  code?: number;
+  reason?: string;
 }
 
 /**
  * Creates a DaemonTransport backed by @ohos.net.webSocket.
- *
- * Usage:
- * ```typescript
- * import { createHarmonyTransport } from '../transport/harmony-transport';
- * import { DaemonClient } from '@getpaseo/client';
- *
- * const transport = createHarmonyTransport({ url: 'ws://192.168.1.5:6767' });
- * const client = new DaemonClient({ transportFactory: () => transport });
- * ```
  */
 export function createHarmonyTransport(options: HarmonyTransportOptions): DaemonTransport {
-  const { url, headers, protocols, logger } = options;
+  const url: string = options.url;
+  const headers: Record<string, string> | undefined = options.headers;
+  const protocols: string[] | undefined = options.protocols;
+  const logger: TransportLogger | undefined = options.logger;
 
-  const ws = webSocket.createWebSocket();
-  const messageHandlers: Array<(data: unknown) => void> = [];
+  const ws: webSocket.WebSocket = webSocket.createWebSocket();
+  const messageHandlers: Array<(data: ESObject) => void> = [];
   const openHandlers: Array<() => void> = [];
-  const closeHandlers: Array<(event?: unknown) => void> = [];
-  const errorHandlers: Array<(event?: unknown) => void> = [];
+  const closeHandlers: Array<(event?: ESObject) => void> = [];
+  const errorHandlers: Array<(event?: ESObject) => void> = [];
 
-  // ---------------------------------------------------------------------------
   // Connection setup
-  // ---------------------------------------------------------------------------
-
   const connectOptions: webSocket.WebSocketRequestOptions = {
-    header: headers ?? {},
+    header: headers ?? {} as Record<string, string>,
   };
 
-  if (protocols && protocols.length > 0) {
-    connectOptions.header['Sec-WebSocket-Protocol'] = protocols.join(', ');
+  if (protocols !== undefined && protocols.length > 0) {
+    const headerValue: string = protocols.join(', ');
+    (connectOptions.header as Record<string, string>)['Sec-WebSocket-Protocol'] = headerValue;
   }
 
   ws.connect(url, connectOptions, (err: Error | null) => {
-    if (err) {
-      logger?.warn({ err: err.message, url }, 'HarmonyTransport: connect failed');
+    if (err !== null) {
+      if (logger !== undefined) {
+        const logData: LoggerWarnData = { err: err.message, url: url };
+        logger.warn(logData, 'HarmonyTransport: connect failed');
+      }
       for (const handler of errorHandlers) {
-        handler({ message: err.message });
+        const errorData: ErrorEventData = { message: err.message };
+        handler(errorData as ESObject);
       }
       return;
     }
 
-    logger?.warn({ url }, 'HarmonyTransport: connected');
+    if (logger !== undefined) {
+      const logData: LoggerWarnData = { url: url };
+      logger.warn(logData, 'HarmonyTransport: connected');
+    }
 
-    // -----------------------------------------------------------------------
-    // Message handler — routes JSON and binary frames
-    // -----------------------------------------------------------------------
+    // Message handler
     ws.on('message', (err: Error | null, value: string | ArrayBuffer) => {
-      if (err) {
-        logger?.warn({ err: err.message }, 'HarmonyTransport: message error');
+      if (err !== null) {
+        if (logger !== undefined) {
+          const logData: LoggerWarnData = { err: err.message };
+          logger.warn(logData, 'HarmonyTransport: message error');
+        }
         return;
       }
-
-      // The daemon sends two kinds of data:
-      // 1. JSON text frames → passed as string (session messages, ping/pong)
-      // 2. Binary frames → passed as ArrayBuffer (terminal I/O)
-      // In both cases, DaemonClient expects the raw value.
       for (const handler of messageHandlers) {
-        handler(value);
+        handler(value as ESObject);
       }
     });
 
-    // -----------------------------------------------------------------------
     // Close handler
-    // -----------------------------------------------------------------------
     ws.on('close', (err: Error | null, value: webSocket.CloseResult) => {
-      logger?.warn({
-        code: value.code,
-        reason: value.reason,
-        err: err?.message,
-      }, 'HarmonyTransport: closed');
+      if (logger !== undefined) {
+        const logData: LoggerWarnData = {
+          code: value.code,
+          reason: value.reason,
+          err: err !== null ? err.message : undefined,
+        };
+        logger.warn(logData, 'HarmonyTransport: closed');
+      }
       for (const handler of closeHandlers) {
-        handler({ code: value.code, reason: value.reason });
+        const closeData: CloseEventData = { code: value.code, reason: value.reason };
+        handler(closeData as ESObject);
       }
     });
 
-    // -----------------------------------------------------------------------
     // Error handler
-    // -----------------------------------------------------------------------
     ws.on('error', (err: Error) => {
-      logger?.warn({ err: err.message }, 'HarmonyTransport: error');
+      if (logger !== undefined) {
+        const logData: LoggerWarnData = { err: err.message };
+        logger.warn(logData, 'HarmonyTransport: error');
+      }
       for (const handler of errorHandlers) {
-        handler({ message: err.message });
+        const errorData: ErrorEventData = { message: err.message };
+        handler(errorData as ESObject);
       }
     });
 
-    // -----------------------------------------------------------------------
     // Fire open handlers
-    // -----------------------------------------------------------------------
     for (const handler of openHandlers) {
       handler();
     }
   });
 
-  // ---------------------------------------------------------------------------
   // DaemonTransport interface
-  // ---------------------------------------------------------------------------
-
-  return {
+  const transport: DaemonTransport = {
     send(data: string | Uint8Array | ArrayBuffer): void {
       ws.send(data);
     },
 
     close(code?: number, reason?: string): void {
       ws.close({
-        code: code ?? 1000,
-        reason: reason ?? '',
+        code: code !== undefined ? code : 1000,
+        reason: reason !== undefined ? reason : '',
       });
     },
 
-    onMessage(handler: (data: unknown) => void): () => void {
+    onMessage(handler: (data: ESObject) => void): () => void {
       messageHandlers.push(handler);
-      return () => {
-        const idx = messageHandlers.indexOf(handler);
+      return (): void => {
+        const idx: number = messageHandlers.indexOf(handler);
         if (idx !== -1) {
           messageHandlers.splice(idx, 1);
         }
@@ -154,43 +155,40 @@ export function createHarmonyTransport(options: HarmonyTransportOptions): Daemon
 
     onOpen(handler: () => void): () => void {
       openHandlers.push(handler);
-      return () => {
-        const idx = openHandlers.indexOf(handler);
+      return (): void => {
+        const idx: number = openHandlers.indexOf(handler);
         if (idx !== -1) {
           openHandlers.splice(idx, 1);
         }
       };
     },
 
-    onClose(handler: (event?: unknown) => void): () => void {
+    onClose(handler: (event?: ESObject) => void): () => void {
       closeHandlers.push(handler);
-      return () => {
-        const idx = closeHandlers.indexOf(handler);
+      return (): void => {
+        const idx: number = closeHandlers.indexOf(handler);
         if (idx !== -1) {
           closeHandlers.splice(idx, 1);
         }
       };
     },
 
-    onError(handler: (event?: unknown) => void): () => void {
+    onError(handler: (event?: ESObject) => void): () => void {
       errorHandlers.push(handler);
-      return () => {
-        const idx = errorHandlers.indexOf(handler);
+      return (): void => {
+        const idx: number = errorHandlers.indexOf(handler);
         if (idx !== -1) {
           errorHandlers.splice(idx, 1);
         }
       };
     },
   };
+
+  return transport;
 }
 
 /**
  * Decode a Paseo terminal binary frame.
- *
- * Frame layout:
- *   byte 0: opcode
- *   byte 1: slot id
- *   bytes 2+: payload (binary or UTF-8 JSON)
  */
 export enum TerminalOpcode {
   Output = 0x01,
@@ -210,10 +208,11 @@ export function decodeTerminalFrame(data: ArrayBuffer): TerminalFrame | null {
     return null;
   }
 
-  const bytes = new Uint8Array(data);
-  return {
+  const bytes: Uint8Array = new Uint8Array(data);
+  const frame: TerminalFrame = {
     opcode: bytes[0] as TerminalOpcode,
     slot: bytes[1],
     payload: bytes.slice(2),
   };
+  return frame;
 }

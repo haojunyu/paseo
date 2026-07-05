@@ -1,0 +1,1 @@
+/mnt/coder/paseo_worktrees/0rykjpbz/noxious-warthog/packages/protocol/dist/browser-automation/rpc-schemas.d.ts
