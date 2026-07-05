@@ -152,42 +152,8 @@ export class TerminalParser {
       return;
     }
 
-    // Final byte
-    const final = {
-      // Cursor movement
-      'A': () => this.buffer.cursorUp(this.getParam(0, 1)),
-      'B': () => this.buffer.cursorDown(this.getParam(0, 1)),
-      'C': () => this.buffer.cursorForward(this.getParam(0, 1)),
-      'D': () => this.buffer.cursorBackward(this.getParam(0, 1)),
-      'H': () => this.buffer.setCursorPosition(this.getParam(0, 1), this.getParam(1, 1)),
-      'f': () => this.buffer.setCursorPosition(this.getParam(0, 1), this.getParam(1, 1)),
-      'G': () => { this.buffer.cursorCol = this.getParam(0, 1) - 1; },
-      'd': () => { this.buffer.cursorRow = this.getParam(0, 1) - 1; },
-
-      // Erase
-      'J': () => this.buffer.eraseDisplay(this.getParam(0, 0)),
-      'K': () => this.buffer.eraseLine(this.getParam(0, 0)),
-
-      // SGR (Select Graphic Rendition)
-      'm': () => this.applySgr(),
-
-      // Cursor visibility
-      'h': () => this.applyMode(true),
-      'l': () => this.applyMode(false),
-
-      // Scroll region
-      'r': () => this.applyScrollRegion(),
-
-      // Cursor position report — ignore for now
-      'n': () => {},
-      's': () => this.buffer.saveCursor(),
-      'u': () => this.buffer.restoreCursor(),
-    };
-
-    const action = final[char as keyof typeof final];
-    if (action) {
-      action();
-    }
+    // Dispatch based on the final character of the CSI sequence
+    this.dispatchCsiFinal(char);
 
     this.state = 'ground';
     this.params = '';
@@ -273,6 +239,30 @@ export class TerminalParser {
     if (top < bottom && bottom < this.buffer.rows) {
       this.buffer.scrollTop = top;
       this.buffer.scrollBottom = bottom;
+    }
+  }
+
+  /** Dispatch a CSI final byte to the appropriate buffer operation. */
+  private dispatchCsiFinal(char: string): void {
+    switch (char) {
+      case 'A': this.buffer.cursorUp(this.getParam(0, 1)); break;
+      case 'B': this.buffer.cursorDown(this.getParam(0, 1)); break;
+      case 'C': this.buffer.cursorForward(this.getParam(0, 1)); break;
+      case 'D': this.buffer.cursorBackward(this.getParam(0, 1)); break;
+      case 'H': this.buffer.setCursorPosition(this.getParam(0, 1), this.getParam(1, 1)); break;
+      case 'f': this.buffer.setCursorPosition(this.getParam(0, 1), this.getParam(1, 1)); break;
+      case 'G': this.buffer.cursorCol = this.getParam(0, 1) - 1; break;
+      case 'd': this.buffer.cursorRow = this.getParam(0, 1) - 1; break;
+      case 'J': this.buffer.eraseDisplay(this.getParam(0, 0)); break;
+      case 'K': this.buffer.eraseLine(this.getParam(0, 0)); break;
+      case 'm': this.applySgr(); break;
+      case 'h': this.applyMode(true); break;
+      case 'l': this.applyMode(false); break;
+      case 'r': this.applyScrollRegion(); break;
+      case 'n': break; // cursor position report — ignore
+      case 's': this.buffer.saveCursor(); break;
+      case 'u': this.buffer.restoreCursor(); break;
+      default: break; // unknown CSI final — ignore
     }
   }
 }

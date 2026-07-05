@@ -11,8 +11,8 @@ import { Icons } from '../common/icons';
 export struct TerminalToolbar {
   @Prop title: string = 'Terminal';
   @Prop isConnected: boolean = false;
-  @Prop onBack: () => void = () => {};
-  @Prop onClear: () => void = () => {};
+  onBack: () => void = () => {};
+  onClear: () => void = () => {};
 
   build() {
     Row() {

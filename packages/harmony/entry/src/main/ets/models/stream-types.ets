@@ -49,7 +49,7 @@ export interface AgentToolCallData {
   callId: string;
   name: string;
   status: AgentToolCallStatus;
-  detail: Record<string, unknown>;
+  detail: ESObject;
 }
 
 export interface ToolCallItem {
@@ -60,7 +60,7 @@ export interface ToolCallItem {
   provider: string;
   name: string;
   status: AgentToolCallStatus;
-  detail: Record<string, unknown>;
+  detail: ESObject;
 }
 
 export type ActivityLogType = 'system' | 'info' | 'success' | 'error';
@@ -84,7 +84,7 @@ export interface TimelineEventItem {
   status?: string;
   callId?: string;
   name?: string;
-  detail?: Record<string, unknown>;
+  detail?: ESObject;
   message?: string;
 }
 

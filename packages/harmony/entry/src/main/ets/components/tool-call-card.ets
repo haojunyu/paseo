@@ -12,7 +12,7 @@ import { Icons } from '../common/icons';
 export struct ToolCallCard {
   @Prop name: string = '';
   @Prop status: string = 'running';
-  @Prop detail: Record<string, unknown> = {};
+  @Prop detail: ESObject = {} as Record<string, Object>;
   @State isExpanded: boolean = false;
 
   /** Display name — capitalize and replace underscores. */

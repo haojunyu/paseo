@@ -148,10 +148,10 @@ function parseInlineSpans(text: string): InlineSpan[] {
   // Simple regex-based approach for Phase 1
   // Order matters: code first (no formatting inside), then bold, then italic, then links
   const pattern = /(`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*|\[([^\]]+)\]\(([^)]+)\)|[^`*[\n]+)/g;
-  let match;
+  let match: RegExpExecArray | null;
 
   while ((match = pattern.exec(text)) !== null) {
-    const raw = match[0];
+    const raw: string = match[0];
 
     if (raw.startsWith('`') && raw.endsWith('`')) {
       spans.push({ type: 'code', text: raw.slice(1, -1) });

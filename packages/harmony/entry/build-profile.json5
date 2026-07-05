@@ -1,26 +1,16 @@
 {
   "apiType": "stageMode",
   "buildOption": {
-    "arkOptions": {
-      "runtimeOnly": {
-        // Allow importing .js / .d.ts from npm packages
-        "packages": [
-          "@getpaseo/client",
-          "@getpaseo/protocol",
-          "@getpaseo/highlight",
-          "markdown-it",
-          "zod",
-          "mnemonic-id"
-        ]
-      }
-    }
+    "arkOptions": {}
   },
   "buildOptionSet": [
     {
       "name": "release",
       "arkOptions": {
         "obfuscation": {
-          "enable": false
+          "ruleOptions": {
+            "enable": false
+          }
         }
       }
     }

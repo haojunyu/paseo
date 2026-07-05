@@ -17,11 +17,12 @@ import { TerminalParser } from '../terminal/terminal-parser';
 import { TerminalRenderer } from '../terminal/terminal-renderer';
 import { PaseoTheme } from '../common/theme';
 import { AppConstants } from '../common/constants';
+import { KeyCode } from '@ohos.multimodalInput.keyCode';
 
 @Component
 export struct TerminalCanvas {
   /** Callback for keyboard input to send to daemon. */
-  @Prop onInput: (data: string) => void = () => {};
+  onInput: (data: string) => void = () => {};
   /** Whether the terminal is connected to a live session. */
   @Prop isConnected: boolean = false;
 
@@ -71,14 +72,15 @@ export struct TerminalCanvas {
     Column() {
       Canvas(this.context)
         .onReady(() => {
-          this.context = (this as unknown as { context: CanvasRenderingContext2D }).context;
-          // We need to get the actual dimensions from the Canvas
-          // For now, use conservative defaults
+          // Canvas is ready — use conservative defaults for dimensions
           this.canvasWidth = 360;
           this.canvasHeight = 600;
-          this.renderer.attach(this.context!, this.canvasWidth, this.canvasHeight);
-          this.renderer.dirtyAll();
-          this.renderer.renderFrame();
+          const ctx = this.context;
+          if (ctx !== null) {
+            this.renderer.attach(ctx, this.canvasWidth, this.canvasHeight);
+            this.renderer.dirtyAll();
+            this.renderer.renderFrame();
+          }
         })
         .onAreaChange((oldValue: Area, newValue: Area) => {
           const w = newValue.width as number;

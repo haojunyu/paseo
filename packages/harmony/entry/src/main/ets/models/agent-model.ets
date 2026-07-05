@@ -9,6 +9,18 @@
 
 export type AgentStatus = 'initializing' | 'idle' | 'running' | 'error' | 'closed';
 
+export interface AgentUpdatePayload {
+  id: string;
+  title?: string;
+  status?: AgentStatus;
+  provider?: string;
+  model?: string;
+  mode?: string;
+  cwd?: string;
+  createdAt?: number;
+  updatedAt?: number;
+}
+
 @Observed
 export class AgentModel {
   id: string = '';
@@ -22,17 +34,7 @@ export class AgentModel {
   updatedAt: number = 0;
 
   /** Update all fields at once from a daemon agent_update payload. */
-  applyUpdate(update: {
-    id: string;
-    title?: string;
-    status?: AgentStatus;
-    provider?: string;
-    model?: string;
-    mode?: string;
-    cwd?: string;
-    createdAt?: number;
-    updatedAt?: number;
-  }): void {
+  applyUpdate(update: AgentUpdatePayload): void {
     this.id = update.id;
     if (update.title !== undefined) this.title = update.title;
     if (update.status !== undefined) this.status = update.status;
