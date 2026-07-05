@@ -1,0 +1,13 @@
+{
+  "name": "@getpaseo/harmony",
+  "version": "0.1.0",
+  "description": "Paseo HarmonyOS native client",
+  "main": "",
+  "author": "",
+  "license": "UNLICENSED",
+  "dependencies": {},
+  "devDependencies": {
+    "@ohos/hvigor-ohos-plugin": "5.0.0",
+    "@ohos/hvigor": "5.0.0"
+  }
+}
