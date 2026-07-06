@@ -51,6 +51,10 @@ export class PaseoClientLifecycle {
       version: '0.0.0',
     };
     this.connection.setConnected(info);
+
+    // Phase 1: no real DaemonClient is constructed (npm JS runtime not
+    // available in ArkTS). The connection model status drives UI navigation;
+    // _client remains null until wire integration is complete.
     await this.saveLastConnection(host, port);
   }
 

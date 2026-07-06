@@ -47,8 +47,15 @@ struct ConnectPage {
 
     try {
       await this.paseo.connect(this.host, portNum, this.password || undefined);
-      // Navigate to agent page on success
-      router.pushUrl({ url: 'pages/agent-page' });
+      // Only navigate if connection state indicates success.
+      // Phase 1 stub always sets 'connected'; real connectivity will
+      // only set it on a successful WebSocket handshake.
+      if (this.paseo.connection.status === 'connected') {
+        router.pushUrl({ url: 'pages/agent-page' });
+      } else {
+        this.errorMessage = 'Connection failed';
+        this.isConnecting = false;
+      }
     } catch (err) {
       this.errorMessage = `${err}`;
     } finally {
