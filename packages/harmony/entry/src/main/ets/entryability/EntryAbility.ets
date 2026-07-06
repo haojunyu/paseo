@@ -25,12 +25,12 @@ export class EntryAbility extends UIAbility {
 
   onWindowStageCreate(windowStage: window.WindowStage): void {
     // Set the initial page to load
-    windowStage.loadContent('pages/connect-page', (err) => {
-      if (err) {
+    windowStage.loadContent('pages/connect-page', (err: BusinessError) => {
+      if (err && err.code !== 0) {
         console.error('Paseo: failed to load connect-page:', JSON.stringify(err));
         return;
       }
-      console.info('Paseo: connect-page loaded');
+      console.info('[PASEO] EntryAbility: connect-page loaded');
     });
   }
 

@@ -27,17 +27,13 @@ export struct MessageList {
    * entire list on every tail/head mutation — ArkUI ForEach uses the
    * key function to diff.
    */
-  get items(): StreamItem[] {
-    return this.store.allItems;
-  }
-
   aboutToAppear(): void {
-    this.lastTotalCount = this.store.totalCount;
+    this.lastTotalCount = this.store?.totalCount ?? 0;
   }
 
   onScrollIndex(firstIndex: number, _lastIndex: number): void {
     // Detect if user scrolled away from bottom
-    const total = this.items.length;
+    const total = (this.store?.allItems ?? []).length;
     this.isAtBottom = firstIndex + 10 >= total; // within ~10 items of bottom
 
     // Load older pages when scrolling near the top
@@ -79,7 +75,7 @@ export struct MessageList {
         .width('100%')
         .layoutWeight(1)
         .justifyContent(FlexAlign.Center);
-      } else if (this.items.length === 0) {
+      } else if ((this.store?.allItems ?? []).length === 0) {
         // Empty state
         Column() {
           Text('No messages yet')
@@ -113,7 +109,7 @@ export struct MessageList {
           }
 
           LazyForEach(
-            new MessageDataSource(this.items),
+            new MessageDataSource((this.store?.allItems ?? [])),
             (item: StreamItem) => {
               ListItem() {
                 MessageItem({ item: item });

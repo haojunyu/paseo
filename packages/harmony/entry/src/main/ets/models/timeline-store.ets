@@ -58,7 +58,9 @@ export class TimelineStore {
 
   /** All items concatenated (for flat-list rendering). */
   get allItems(): StreamItem[] {
-    return [...this.tail, ...this.head];
+    // Defensive: tail/head may be undefined during initial @ObjectLink
+    // resolution before ArkUI proxies are fully wired.
+    return [...(this.tail ?? []), ...(this.head ?? [])];
   }
 
   /** Reset to empty state. */
