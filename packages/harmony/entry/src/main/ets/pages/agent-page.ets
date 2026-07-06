@@ -30,10 +30,15 @@ struct AgentPage {
   private paseo = EntryAbility.paseoClient;
 
   aboutToAppear(): void {
-    if (!this.paseo.client || this.paseo.connection.status !== 'connected') {
-      router.replaceUrl({ url: 'pages/connect-page' });
-      return;
-    }
+    // Defer the connection guard so it runs after the page transition
+    // completes. Calling router.replaceUrl() during an active pushUrl
+    // animation corrupts the ArkUI page stack and causes a crash.
+    setTimeout(() => {
+      // Check connection state (not _client, which is null in Phase 1 stub).
+      if (this.paseo.connection.status !== 'connected') {
+        router.replaceUrl({ url: 'pages/connect-page' });
+      }
+    }, 100);
 
     // Load the first available agent (Phase 1: single-agent)
     this.loadFirstAgent();
